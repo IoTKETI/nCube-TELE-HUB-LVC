@@ -1,4 +1,4 @@
-# nCube-TELE-LVC
+# nCube-TELE-HUB-LVC
 Start Guide
 
 ### Install dependencies
@@ -15,15 +15,6 @@ $ cd /home/pi/nCube-TELE-LVC
 
 $ npm install
 ```
-
-### Connect with FC (ex. CubePilot Cube Orange)
-1. Set FC
-   - Serial baudrate : 115200
-   - Change parameter
-     - SRx: 2hz
-     - SYSID_THISMAV: change to a value other than 1
-2. Connect MC and FC
-   - Connect UART1(/dev/ttyAMA0) of MC and TELEMx of FC via Serial.
 
 ### Mobius address
 
