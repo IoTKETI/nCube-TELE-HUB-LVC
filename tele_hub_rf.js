@@ -10,13 +10,14 @@ require("moment-timezone");
 const moment = require('moment');
 moment.tz.setDefault("Asia/Seoul");
 
+const mavlink = require('./mavlibrary/mavlink.js');
+const dgram = require("dgram");
+
 let rfPort = null;
 let rfPort_info = {
     Path: 'COM5',
     BaudRate: 115200
 }
-
-let tas_mav = null;
 
 let mobius_sub_rc_topic = '/Mobius/';
 
@@ -32,11 +33,11 @@ global.my_command_name = '';
 const retry_interval = 2500;
 const normal_interval = 100;
 
-let sub_sim_info_for_start = '/LVC/start';
 global.pub_start_init = '/LVC/init';
 
 global.init_flag = false;
-let init_t = null;
+
+let mission_topic = '/Mobius/' + my_gcs_name + '/Mission_Data/' + my_drone_name;
 
 global.getType = function (p) {
     var type = 'string';
@@ -177,23 +178,9 @@ function retrieve_my_cnt_name() {
     sh_state = 'crtae';
     setTimeout(http_watchdog, normal_interval);
 
-    tas_mav = require('./thyme_tas_mav');
-// TODO: 실드론과 SIM 연동 추가
     mqtt_connect('127.0.0.1');
 
-    if (my_simul.toLowerCase() === 'on') {
-        if (mqtt_client !== null) {
-            let drone_info = {};
-            drone_info.drone_name = my_drone_name;
-            init_t = setInterval(() => {
-                if (!init_flag) {
-                    mqtt_client.publish(pub_start_init, JSON.stringify(drone_info));
-                } else {
-                    clearInterval(init_t)
-                }
-            }, 5 * 1000);
-        }
-    }
+    rfPortOpening();
 }
 
 function http_watchdog() {
@@ -292,13 +279,6 @@ function http_watchdog() {
                 if (conf.sub.length <= count) {
                     sh_state = 'crtci';
 
-                    if (my_simul.toLowerCase() === 'off') {
-                        console.log("====================================\n\t Using real drone \t\t\n====================================");
-                        tas_mav.ready()
-                    } else {
-                        console.log("==============================\n\t Using SITL \t\t\n==============================");
-                    }
-
                     setTimeout(http_watchdog, normal_interval);
                 }
             }
@@ -309,6 +289,59 @@ function http_watchdog() {
 }
 
 setTimeout(http_watchdog, normal_interval);
+
+const RC_RATE = 0.64;
+
+function SBUS2RC(x) {
+    return Math.round((x * 8 + 1 - 1000) * RC_RATE + 1500);
+}
+
+function mavlinkGenerateMessage(src_sys_id, src_comp_id, type, params) {
+    const mavlinkParser = new MAVLink(null/*logger*/, src_sys_id, src_comp_id);
+
+    let mavMsg
+    let genMsg
+
+    try {
+        mavMsg = null;
+        genMsg = null;
+
+        switch (type) {
+            case mavlink.MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE:
+                mavMsg = new mavlink.messages.rc_channels_override(params.target_system,
+                    params.target_component,
+                    params.ch1_raw,
+                    params.ch2_raw,
+                    params.ch3_raw,
+                    params.ch4_raw,
+                    params.ch5_raw,
+                    params.ch6_raw,
+                    params.ch7_raw,
+                    params.ch8_raw,
+                    params.ch9_raw,
+                    params.ch10_raw,
+                    params.ch11_raw,
+                    params.ch12_raw,
+                    params.ch13_raw,
+                    params.ch14_raw,
+                    params.ch15_raw,
+                    params.ch16_raw,
+                    // params.ch17_raw,
+                    // params.ch18_raw,
+                );
+                break;
+        }
+    } catch (e) {
+        console.log('MAVLINK EX:' + e);
+    }
+
+    if (mavMsg) {
+        genMsg = Buffer.from(mavMsg.pack(mavlinkParser));
+        //console.log('>>>>> MAVLINK OUTGOING MSG: ' + genMsg.toString('hex'));
+    }
+
+    return genMsg;
+}
 
 function mqtt_connect(serverip) {
     if (mqtt_client === null) {
@@ -359,39 +392,56 @@ function mqtt_connect(serverip) {
                     console.log('[mqtt] my_command_name is subscribed: ' + my_command_name);
                 });
             }
-            if (sub_sim_info_for_start !== '') {
-                mqtt_client.subscribe(sub_sim_info_for_start, () => {
-                    console.log('[mqtt] sub_sim_info_for_start is subscribed: ' + sub_sim_info_for_start);
-                });
-            }
         })
 
         mqtt_client.on('message', (topic, message) => {
             if (topic === mobius_sub_rc_topic) {
-                tas_mav.gcs_noti_handler(message.toString('hex'));
+                let ver = message.substring(0, 2);
+                if (ver === 'ff') {
+                    let rc_data = message.toString('hex');
+
+                    let mission_value = {};
+                    mission_value.target_system = my_sysid;
+                    mission_value.target_component = 1;
+                    mission_value.ch1_raw = SBUS2RC(parseInt(rc_data.substring(36, 38), 16));   // CH 18 - Tilt
+                    mission_value.ch2_raw = SBUS2RC(parseInt(rc_data.substring(34, 36), 16));   // CH 17 - Pan
+                    mission_value.ch3_raw = SBUS2RC(parseInt(rc_data.substring(38, 40), 16));   // CH 19 - Zoom
+                    mission_value.ch4_raw = SBUS2RC(parseInt(rc_data.substring(54, 56), 16));   // CH 27 - Gun
+                    // mission_value.ch4_raw = SBUS2RC(parseInt(rc_data.substring(40, 42), 16));   // CH 20
+                    mission_value.ch5_raw = SBUS2RC(parseInt(rc_data.substring(12, 14), 16));   // CH 6 - Drop
+                    mission_value.ch6_raw = SBUS2RC(parseInt(rc_data.substring(42, 44), 16));   // CH 21 - Camera direction
+                    mission_value.ch7_raw = SBUS2RC(parseInt(rc_data.substring(44, 46), 16));   // CH 22 - camera mode
+                    mission_value.ch8_raw = SBUS2RC(parseInt(rc_data.substring(46, 48), 16));   // CH 23 - sub
+                    mission_value.ch9_raw = SBUS2RC(parseInt(rc_data.substring(48, 50), 16));   // CH 24
+                    mission_value.ch10_raw = SBUS2RC(parseInt(rc_data.substring(50, 52), 16));   // CH 25
+                    mission_value.ch11_raw = SBUS2RC(parseInt(rc_data.substring(52, 54), 16));   // CH 26
+                    mission_value.ch12_raw = SBUS2RC(parseInt(rc_data.substring(56, 58), 16));   // CH 28
+                    mission_value.ch13_raw = SBUS2RC(parseInt(rc_data.substring(58, 60), 16));   // CH 29
+                    mission_value.ch14_raw = SBUS2RC(parseInt(rc_data.substring(60, 62), 16));   // CH 30
+                    mission_value.ch15_raw = SBUS2RC(parseInt(rc_data.substring(62, 64), 16));   // CH 31
+                    mission_value.ch16_raw = SBUS2RC(parseInt(rc_data.substring(64, 66), 16));   // CH 32
+                    console.log(mission_value);
+
+                    try {
+                        let mission_signal = mavlinkGenerateMessage(255, 0xbe, mavlink.MAVLINK_MSG_ID_RC_CHANNELS_OVERRIDE, mission_value);
+                        if (mission_signal == null) {
+                            console.log("mavlink message is null");
+                        } else {
+                            if (mqtt_client !== null) {
+                                mqtt_client.publish(mission_topic, mission_signal, () => {
+                                    // console.log('publish ' + mission_signal.toString('hex') + ' to ' + mission_topic);
+                                });
+                            }
+                        }
+                    } catch (ex) {
+                        console.log('[ERROR] ' + ex);
+                    }
+                }
             } else if (topic === my_command_name) {
-                tas_mav.gcs_noti_handler(message.toString('hex'));
-            } else if (topic === sub_sim_info_for_start) {
-                // TODO: 버퍼에 감싸서 보내는지, JSON 그대로 보내는지
-                let init_info = JSON.parse(message.toString());
-                console.log(init_info)
-                if (!started) {
-                    tas_mav.ready()
-                    // TODO: heading(Hdg) 값 필요함, dronelocation 무슨 값인지??
-                    console.log('sh start_sitl.sh ' + init_info.dronelocation.Lat + ' ' + init_info.dronelocation.Lon + ' ' + init_info.dronelocation.Alt + ' ' + init_info.dronelocation.Hdg);
-                    exec('sh start_sitl.sh ' + init_info.dronelocation.Lat + ' ' + init_info.dronelocation.Lon + ' ' + init_info.dronelocation.Alt + ' ' + init_info.dronelocation.Hdg, {cwd: process.cwd()}, (error, stdout, stderr) => {
-                        if (error) {
-                            console.log('error - ' + error);
-                        }
-                        if (stdout) {
-                            console.log('stdout - ' + stdout);
-                        }
-                        if (stderr) {
-                            console.log('stderr - ' + stderr);
-                        }
+                if (rfPort !== null) {
+                    rfPort.write(message, () => {
+                        console.log('Send FC Command (' + message.toString('hex') + ')to drone')
                     });
-                    started = true;
-                    init_flag = true;
                 }
             } else {
                 console.log('Received Message ' + message.toString('hex') + ' From ' + topic);
@@ -450,7 +500,7 @@ let mavStrFromDroneLength = 0;
 let mavVersion = 'unknown';
 let mavVersionCheckFlag = false;
 
-function rfPortData(date) {
+function rfPortData(data) {
     mavStrFromDrone += data.toString('hex').toLowerCase();
 
     while (mavStrFromDrone.length > 20) {
@@ -514,16 +564,11 @@ function rfPortData(date) {
                     mavPacket = mavStrFromDrone.substring(0, mavLength);
                     // console.log('v1', mavPacket);
 
-                    if (my_simul.toLowerCase() === 'on') {
-                        if (mqtt_client !== null) {
-                            mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
-                        }
-                        send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
-                    } else {
-                        if (rfPort !== null) {
-                            rfPort.write(Buffer.from(mavPacket, 'hex'));
-                        }
+                    if (mqtt_client !== null) {
+                        mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
                     }
+                    send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
+
                     setTimeout(parseMavFromDrone, 0, mavPacket);
 
                     mavStrFromDrone = mavStrFromDrone.substring(mavLength);
@@ -539,16 +584,11 @@ function rfPortData(date) {
                     mavPacket = mavStrFromDrone.substring(0, mavLength);
                     // console.log('v2', mavPacket);
 
-                    if (my_simul.toLowerCase() === 'on') {
-                        if (mqtt_client !== null) {
-                            mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
-                        }
-                        send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
-                    } else {
-                        if (rfPort !== null) {
-                            rfPort.write(Buffer.from(mavPacket, 'hex'));
-                        }
+                    if (mqtt_client !== null) {
+                        mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
                     }
+                    send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
+
                     setTimeout(parseMavFromDrone, 0, mavPacket);
 
                     mavStrFromDrone = mavStrFromDrone.substring(mavLength);
@@ -560,6 +600,111 @@ function rfPortData(date) {
                 mavStrFromDrone = mavStrFromDrone.substring(2);
             }
         }
+    }
+}
+
+let fc = {};
+let flag_base_mode = 0;
+
+function parseMavFromDrone(mavPacket) {
+    let ver;
+    let cur_seq;
+    let sys_id;
+    let msg_id;
+    let base_offset;
+    try {
+        ver = mavPacket.substring(0, 2);
+        if (ver === 'fd') {
+            cur_seq = parseInt(mavPacket.substring(8, 10), 16);
+            sys_id = parseInt(mavPacket.substring(10, 12).toLowerCase(), 16);
+            msg_id = parseInt(mavPacket.substring(18, 20) + mavPacket.substring(16, 18) + mavPacket.substring(14, 16), 16);
+            base_offset = 20;
+        } else {
+            cur_seq = parseInt(mavPacket.substring(4, 6), 16);
+            sys_id = parseInt(mavPacket.substring(6, 8).toLowerCase(), 16);
+            msg_id = parseInt(mavPacket.substring(10, 12).toLowerCase(), 16);
+            base_offset = 12;
+        }
+
+        if (msg_id === mavlink.MAVLINK_MSG_ID_HEARTBEAT) { // #00 : HEARTBEAT
+            var custom_mode = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 8;
+            var type = mavPacket.substring(base_offset, base_offset + 2).toLowerCase();
+            base_offset += 2;
+            var autopilot = mavPacket.substring(base_offset, base_offset + 2).toLowerCase();
+            base_offset += 2;
+            var base_mode = mavPacket.substring(base_offset, base_offset + 2).toLowerCase();
+            base_offset += 2;
+            var system_status = mavPacket.substring(base_offset, base_offset + 2).toLowerCase();
+            base_offset += 2;
+            var mavlink_version = mavPacket.substring(base_offset, base_offset + 2).toLowerCase();
+
+            fc.heartbeat = {};
+            fc.heartbeat.type = Buffer.from(type, 'hex').readUInt8(0);
+            fc.heartbeat.autopilot = Buffer.from(autopilot, 'hex').readUInt8(0);
+            fc.heartbeat.base_mode = Buffer.from(base_mode, 'hex').readUInt8(0);
+            fc.heartbeat.custom_mode = Buffer.from(custom_mode, 'hex').readUInt32LE(0);
+            fc.heartbeat.system_status = Buffer.from(system_status, 'hex').readUInt8(0);
+            fc.heartbeat.mavlink_version = Buffer.from(mavlink_version, 'hex').readUInt8(0);
+
+            if (fc.heartbeat.base_mode & 0x80) {
+                if (flag_base_mode === 3) {
+                    flag_base_mode++;
+                    my_sortie_name = moment().format('YYYY_MM_DD_T_HH_mm');
+                    my_cnt_name = my_parent_cnt_name + '/' + my_sortie_name;
+                    sh_adn.crtct(my_parent_cnt_name + '?rcn=0', my_sortie_name, 0, function (rsc, res_body, count) {
+                    });
+                } else {
+                    flag_base_mode++
+                    if (flag_base_mode > 16) {
+                        flag_base_mode = 16;
+                    }
+                }
+            } else {
+                flag_base_mode = 0;
+
+                my_sortie_name = 'disarm';
+                my_cnt_name = my_parent_cnt_name + '/' + my_sortie_name;
+            }
+        } else if (msg_id == mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT) { // #33
+            var time_boot_ms = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 8;
+            var lat = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 8;
+            var lon = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 8;
+            var alt = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 8;
+            var relative_alt = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 8;
+            var vx = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 4;
+            var vy = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 4;
+            var vz = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+            base_offset += 4;
+            var hdg = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
+
+            fc.global_position_int = {};
+            fc.global_position_int.lat = Buffer.from(lat, 'hex').readInt32LE(0);
+            fc.global_position_int.lon = Buffer.from(lon, 'hex').readInt32LE(0);
+            fc.global_position_int.alt = Buffer.from(alt, 'hex').readInt32LE(0);
+            fc.global_position_int.relative_alt = Buffer.from(relative_alt, 'hex').readInt32LE(0);
+            // fc.global_position_int.vx = Buffer.from(vx, 'hex').readInt16LE(0);
+            // fc.global_position_int.vy = Buffer.from(vy, 'hex').readInt16LE(0);
+            // fc.global_position_int.vz = Buffer.from(vz, 'hex').readInt16LE(0);
+            fc.global_position_int.hdg = Buffer.from(hdg, 'hex').readUInt16LE(0);
+
+            if (my_simul.toLowerCase() === 'off') {
+                if (!init_flag) {
+                    // TODO: 추후 실드론에서도 init_flag 값 변경하여 지속적으로 보내는 것 방지
+                    fc.global_position_int.drone_name = my_drone_name;
+                    mqtt_client.publish(pub_start_init, JSON.stringify(fc.global_position_int));
+                }
+            }
+        }
+    } catch (e) {
+        console.log('[parseMavFromDrone Error]', msg_id + '\n' + e);
     }
 }
 
