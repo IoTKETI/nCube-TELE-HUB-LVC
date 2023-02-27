@@ -9,9 +9,20 @@ const {SerialPort} = require("serialport");
 require("moment-timezone");
 const moment = require('moment');
 moment.tz.setDefault("Asia/Seoul");
+const dgram = require("dgram");
+const net = require("net");
 
 const mavlink = require('./mavlibrary/mavlink.js');
-const dgram = require("dgram");
+
+let mavUdpComLink = {};
+let mavTcpComLink = {};
+
+let MP_protocol = 'udp'
+if (MP_protocol.toLowerCase() === 'udp') {
+    createUdpCommLink(my_sysid, 10000 + parseInt(my_sysid, 10));
+} else if (MP_protocol.toLowerCase() === 'tcp') {
+    createTcpCommLink(my_sysid, 9000 + parseInt(my_sysid, 10));
+}
 
 let rfPort = null;
 let rfPort_info = {
@@ -396,7 +407,7 @@ function mqtt_connect(serverip) {
 
         mqtt_client.on('message', (topic, message) => {
             if (topic === mobius_sub_rc_topic) {
-                let ver = message.substring(0, 2);
+                let ver = message.toString().substring(0, 2);
                 if (ver === 'ff') {
                     let rc_data = message.toString('hex');
 
@@ -626,6 +637,23 @@ function parseMavFromDrone(mavPacket) {
             base_offset = 12;
         }
 
+        if (MP_protocol.toLowerCase() === 'udp') {
+            if (mavUdpComLink.hasOwnProperty(sys_id)) {
+                mavUdpComLink[sys_id].socket.send(Buffer.from(mavPacket, 'hex'), mavUdpComLink[sys_id].port, '127.0.0.1', (error) => {
+                    if (error) {
+                        mavUdpComLink[sys_id].socket.close();
+                        console.log('udpCommLink[' + sys_id + '].socket is closed');
+                    }
+                });
+            }
+        } else if (MP_protocol.toLowerCase() === 'tcp') {
+            if (mavTcpComLink.hasOwnProperty(sys_id)) {
+                mavTcpComLink[sys_id].socket.write(Buffer.from(mavPacket, 'hex'), () => {
+                    // console.log('[RF] Written through TCP - ' + data);
+                });
+            }
+        }
+
         if (msg_id === mavlink.MAVLINK_MSG_ID_HEARTBEAT) { // #00 : HEARTBEAT
             var custom_mode = mavPacket.substring(base_offset, base_offset + 8).toLowerCase();
             base_offset += 8;
@@ -725,5 +753,84 @@ function send_aggr_to_Mobius(topic, content_each, gap) {
 
             delete aggr_content[topic];
         }, gap, topic);
+    }
+}
+
+function createUdpCommLink(sys_id, port) {
+    if (!mavUdpComLink.hasOwnProperty(sys_id)) {
+        var udpSocket = dgram.createSocket('udp4');
+
+        udpSocket.id = sys_id;
+
+        mavUdpComLink[sys_id] = {};
+        mavUdpComLink[sys_id].socket = udpSocket;
+        mavUdpComLink[sys_id].port = port;
+
+        console.log('UDP socket created on port ' + port + ' [' + sys_id + ']');
+
+        udpSocket.on('message', (msg) => {
+            if (rfPort !== null) {
+                rfPort.write(msg);
+            }
+        });
+
+        udpSocket.on('close', function () {
+            console.log('close');
+
+            if (mavUdpComLink.hasOwnProperty(this.id)) {
+                delete mavUdpComLink[this.id];
+            }
+
+            createTcpCommLink(this.id, mavUdpComLink[this.id].port);
+        });
+    }
+}
+
+function createTcpCommLink(sys_id, port) {
+    if (!mavTcpComLink.hasOwnProperty(sys_id)) {
+        var tcpSocket = net.createServer(function (socket) {
+            console.log('TCP socket connected [' + sys_id + ']');
+
+            socket.id = sys_id;
+
+            mavTcpComLink[sys_id] = {};
+            mavTcpComLink[sys_id].socket = socket;
+            mavTcpComLink[sys_id].port = port;
+
+            socket.on('data', (data) => {
+                console.log('TCP Received GCS data - ' + data.toString('hex'))
+                if (rfPort !== null) {
+                    rfPort.write(data);
+                }
+            });
+
+            socket.on('end', function () {
+                console.log('end');
+
+                if (mavTcpComLink.hasOwnProperty(this.id)) {
+                    delete mavTcpComLink[this.id];
+                }
+            });
+
+            socket.on('close', function () {
+                console.log('close');
+
+                if (mavTcpComLink.hasOwnProperty(this.id)) {
+                    delete mavTcpComLink[this.id];
+                }
+            });
+
+            socket.on('error', function (e) {
+                console.log('error ', e);
+
+                if (mavTcpComLink.hasOwnProperty(this.id)) {
+                    delete mavTcpComLink[this.id];
+                }
+            });
+        });
+
+        tcpSocket.listen(port, '127.0.0.1', function () {
+            console.log('TCP Server for secure is listening on port ' + port);
+        });
     }
 }
