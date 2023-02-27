@@ -27,7 +27,7 @@ if (MP_protocol.toLowerCase() === 'udp') {
 let rfPort = null;
 let rfPort_info = {
     Path: 'COM5',
-    BaudRate: 115200
+    BaudRate: '115200'
 }
 
 let mobius_sub_rc_topic = '/Mobius/';
@@ -295,7 +295,7 @@ function http_watchdog() {
             }
         });
     } else if (sh_state === 'crtci') {
-        //setTimeout(check_rtv_cnt, 10000);
+        console.log('[sh_state] : ' + sh_state);
     }
 }
 
@@ -514,6 +514,7 @@ let mavVersion = 'unknown';
 let mavVersionCheckFlag = false;
 
 function rfPortData(data) {
+    console.log('rfPortData - ' + data.toString('hex'));
     mavStrFromDrone += data.toString('hex').toLowerCase();
 
     while (mavStrFromDrone.length > 20) {
@@ -616,22 +617,17 @@ function rfPortData(data) {
     }
 }
 
-let fc = {};
-let flag_base_mode = 0;
+var fc = {}
+var flag_base_mode = 0
 
 function parseMavFromDrone(mavPacket) {
-    let ver;
-    let cur_seq;
-    let sys_id;
-    let msg_id;
-    let base_offset;
     try {
-        ver = mavPacket.substring(0, 2);
+        var ver = mavPacket.substring(0, 2);
         if (ver === 'fd') {
-            cur_seq = parseInt(mavPacket.substring(8, 10), 16);
-            sys_id = parseInt(mavPacket.substring(10, 12).toLowerCase(), 16);
-            msg_id = parseInt(mavPacket.substring(18, 20) + mavPacket.substring(16, 18) + mavPacket.substring(14, 16), 16);
-            base_offset = 20;
+            var cur_seq = parseInt(mavPacket.substring(8, 10), 16);
+            var sys_id = parseInt(mavPacket.substring(10, 12).toLowerCase(), 16);
+            var msg_id = parseInt(mavPacket.substring(18, 20) + mavPacket.substring(16, 18) + mavPacket.substring(14, 16), 16);
+            var base_offset = 20;
         } else {
             cur_seq = parseInt(mavPacket.substring(4, 6), 16);
             sys_id = parseInt(mavPacket.substring(6, 8).toLowerCase(), 16);
