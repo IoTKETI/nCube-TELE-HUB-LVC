@@ -515,113 +515,99 @@ var mavVersionCheckFlag = false;
 
 function rfPortData(data) {
     console.log('rfPortData - ' + data.toString('hex'));
-    // mavStrFromDrone += data.toString('hex').toLowerCase();
-    //
-    // while (mavStrFromDrone.length > 20) {
-    //     if (!mavVersionCheckFlag) {
-    //         var stx = mavStrFromDrone.substring(0, 2);
-    //         if (stx === 'fe') {
-    //             var len = parseInt(mavStrFromDrone.substring(2, 4), 16);
-    //             var mavLength = (6 * 2) + (len * 2) + (2 * 2);
-    //             var sysid = parseInt(mavStrFromDrone.substring(6, 8), 16);
-    //             var msgid = parseInt(mavStrFromDrone.substring(10, 12), 16);
-    //
-    //             if (msgid === 0 && len === 9) { // HEARTBEAT
-    //                 mavVersionCheckFlag = true;
-    //                 mavVersion = 'v1';
-    //             }
-    //
-    //             if ((mavStrFromDrone.length) >= mavLength) {
-    //                 var mavPacket = mavStrFromDrone.substring(0, mavLength);
-    //
-    //                 mavStrFromDrone = mavStrFromDrone.substring(mavLength);
-    //                 mavStrFromDroneLength = 0;
-    //             } else {
-    //                 break;
-    //             }
-    //         } else if (stx === 'fd') {
-    //             len = parseInt(mavStrFromDrone.substring(2, 4), 16);
-    //             mavLength = (10 * 2) + (len * 2) + (2 * 2);
-    //
-    //             sysid = parseInt(mavStrFromDrone.substring(10, 12), 16);
-    //             msgid = parseInt(mavStrFromDrone.substring(18, 20) + mavStrFromDrone.substring(16, 18) + mavStrFromDrone.substring(14, 16), 16);
-    //
-    //             if (msgid === 0 && len === 9) { // HEARTBEAT
-    //                 mavVersionCheckFlag = true;
-    //                 mavVersion = 'v2';
-    //             }
-    //             if (mavStrFromDrone.length >= mavLength) {
-    //                 mavPacket = mavStrFromDrone.substring(0, mavLength);
-    //
-    //                 mavStrFromDrone = mavStrFromDrone.substring(mavLength);
-    //                 mavStrFromDroneLength = 0;
-    //             } else {
-    //                 break;
-    //             }
-    //         } else {
-    //             mavStrFromDrone = mavStrFromDrone.substring(2);
-    //         }
-    //     } else {
-    //         stx = mavStrFromDrone.substring(0, 2);
-    //         if (mavVersion === 'v1' && stx === 'fe') {
-    //             len = parseInt(mavStrFromDrone.substring(2, 4), 16);
-    //             mavLength = (6 * 2) + (len * 2) + (2 * 2);
-    //
-    //             if ((mavStrFromDrone.length) >= mavLength) {
-    //                 mavPacket = mavStrFromDrone.substring(0, mavLength);
-    //                 // console.log('v1', mavPacket);
-    //
-    //                 if (my_simul.toLowerCase() === 'on') {
-    //                     if (mqtt_client !== null) {
-    //                         mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
-    //                     }
-    //                     send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
-    //                 } else if (my_simul.toLowerCase() === 'off') {
-    //                     if (rfPort !== null) {
-    //                         rfPort.write(Buffer.from(mavPacket, 'hex'), () => {
-    //                             console.log(mavPacket);
-    //                         });
-    //                     }
-    //                 }
-    //                 setTimeout(parseMavFromDrone, 0, mavPacket);
-    //
-    //                 mavStrFromDrone = mavStrFromDrone.substring(mavLength);
-    //                 mavStrFromDroneLength = 0;
-    //             } else {
-    //                 break;
-    //             }
-    //         } else if (mavVersion === 'v2' && stx === 'fd') {
-    //             len = parseInt(mavStrFromDrone.substring(2, 4), 16);
-    //             mavLength = (10 * 2) + (len * 2) + (2 * 2);
-    //
-    //             if (mavStrFromDrone.length >= mavLength) {
-    //                 mavPacket = mavStrFromDrone.substring(0, mavLength);
-    //                 // console.log('v2', mavPacket);
-    //
-    //                 if (my_simul.toLowerCase() === 'on') {
-    //                     if (mqtt_client !== null) {
-    //                         mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
-    //                     }
-    //                     send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
-    //                 } else if (my_simul.toLowerCase() === 'off') {
-    //                     if (rfPort !== null) {
-    //                         rfPort.write(Buffer.from(mavPacket, 'hex'), () => {
-    //                             // console.log(mavPacket);
-    //                         });
-    //                     }
-    //                 }
-    //                 setTimeout(parseMavFromDrone, 0, mavPacket);
-    //
-    //                 mavStrFromDrone = mavStrFromDrone.substring(mavLength);
-    //                 mavStrFromDroneLength = 0;
-    //             } else {
-    //                 break;
-    //             }
-    //         } else {
-    //             mavStrFromDrone = mavStrFromDrone.substring(2);
-    //         }
-    //     }
-    // }
+    mavStrFromDrone += data.toString('hex').toLowerCase();
+
+    while (mavStrFromDrone.length > 20) {
+        if (!mavVersionCheckFlag) {
+            var stx = mavStrFromDrone.substring(0, 2);
+            if (stx === 'fe') {
+                var len = parseInt(mavStrFromDrone.substring(2, 4), 16);
+                var mavLength = (6 * 2) + (len * 2) + (2 * 2);
+                var sysid = parseInt(mavStrFromDrone.substring(6, 8), 16);
+                var msgid = parseInt(mavStrFromDrone.substring(10, 12), 16);
+
+                if (msgid === 0 && len === 9) { // HEARTBEAT
+                    mavVersionCheckFlag = true;
+                    mavVersion = 'v1';
+                }
+
+                if ((mavStrFromDrone.length) >= mavLength) {
+                    mavPacket = mavStrFromDrone.substring(0, mavLength);
+
+                    mavStrFromDrone = mavStrFromDrone.substring(mavLength);
+                    mavStrFromDroneLength = 0;
+                } else {
+                    break;
+                }
+            } else if (stx === 'fd') {
+                len = parseInt(mavStrFromDrone.substring(2, 4), 16);
+                mavLength = (10 * 2) + (len * 2) + (2 * 2);
+
+                sysid = parseInt(mavStrFromDrone.substring(10, 12), 16);
+                msgid = parseInt(mavStrFromDrone.substring(18, 20) + mavStrFromDrone.substring(16, 18) + mavStrFromDrone.substring(14, 16), 16);
+
+                if (msgid === 0 && len === 9) { // HEARTBEAT
+                    mavVersionCheckFlag = true;
+                    mavVersion = 'v2';
+                }
+                if (mavStrFromDrone.length >= mavLength) {
+                    mavPacket = mavStrFromDrone.substring(0, mavLength);
+
+                    mavStrFromDrone = mavStrFromDrone.substring(mavLength);
+                    mavStrFromDroneLength = 0;
+                } else {
+                    break;
+                }
+            } else {
+                mavStrFromDrone = mavStrFromDrone.substring(2);
+            }
+        } else {
+            stx = mavStrFromDrone.substring(0, 2);
+            if (mavVersion === 'v1' && stx === 'fe') {
+                len = parseInt(mavStrFromDrone.substring(2, 4), 16);
+                mavLength = (6 * 2) + (len * 2) + (2 * 2);
+
+                if ((mavStrFromDrone.length) >= mavLength) {
+                    mavPacket = mavStrFromDrone.substring(0, mavLength);
+                    // console.log('v1', mavPacket);
+
+                    if (mqtt_client !== null) {
+                        mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                    }
+                    send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
+
+                    setTimeout(parseMavFromDrone, 0, mavPacket);
+
+                    mavStrFromDrone = mavStrFromDrone.substring(mavLength);
+                    mavStrFromDroneLength = 0;
+                } else {
+                    break;
+                }
+            } else if (mavVersion === 'v2' && stx === 'fd') {
+                len = parseInt(mavStrFromDrone.substring(2, 4), 16);
+                mavLength = (10 * 2) + (len * 2) + (2 * 2);
+
+                if (mavStrFromDrone.length >= mavLength) {
+                    mavPacket = mavStrFromDrone.substring(0, mavLength);
+                    // console.log('v2', mavPacket);
+
+                    if (mqtt_client !== null) {
+                        mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                    }
+                    send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
+
+                    setTimeout(parseMavFromDrone, 0, mavPacket);
+
+                    mavStrFromDrone = mavStrFromDrone.substring(mavLength);
+                    mavStrFromDroneLength = 0;
+                } else {
+                    break;
+                }
+            } else {
+                mavStrFromDrone = mavStrFromDrone.substring(2);
+            }
+        }
+    }
 }
 
 var fc = {}
