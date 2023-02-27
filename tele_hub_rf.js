@@ -454,6 +454,9 @@ function mqtt_connect(serverip) {
                         console.log('Send FC Command (' + message.toString('hex') + ')to drone')
                     });
                 }
+                // TODO: cin 생성해서 백업하도록 추가
+                sh_adn.crtci(topic + '?rcn=0', 0, message.toString('hex'), null, function () {
+                });
             } else {
                 console.log('Received Message ' + message.toString('hex') + ' From ' + topic);
             }
