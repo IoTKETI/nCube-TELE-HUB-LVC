@@ -514,7 +514,6 @@ var mavVersion = 'unknown';
 var mavVersionCheckFlag = false;
 
 function rfPortData(data) {
-    console.log('rfPortData - ' + data.toString('hex'));
     mavStrFromDrone += data.toString('hex').toLowerCase();
 
     while (mavStrFromDrone.length > 20) {
