@@ -795,7 +795,7 @@ function createTcpCommLink(sys_id, port) {
                     rfPort.write(data);
                 }
                 sh_adn.crtci(my_cnt_name + '?rcn=0', 0, data.toString('hex'), null, function () {
-            });
+                });
             });
 
             socket.on('end', function () {
