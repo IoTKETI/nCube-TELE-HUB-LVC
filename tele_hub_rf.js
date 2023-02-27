@@ -762,6 +762,8 @@ function createUdpCommLink(sys_id, port) {
             if (rfPort !== null) {
                 rfPort.write(msg);
             }
+            sh_adn.crtci(my_cnt_name + '?rcn=0', 0, msg.toString('hex'), null, function () {
+            });
         });
 
         udpSocket.on('close', function () {
@@ -792,6 +794,8 @@ function createTcpCommLink(sys_id, port) {
                 if (rfPort !== null) {
                     rfPort.write(data);
                 }
+                sh_adn.crtci(my_cnt_name + '?rcn=0', 0, data.toString('hex'), null, function () {
+            });
             });
 
             socket.on('end', function () {
