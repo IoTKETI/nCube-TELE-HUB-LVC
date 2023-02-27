@@ -532,7 +532,7 @@ function rfPortData(data) {
                 }
 
                 if ((mavStrFromDrone.length) >= mavLength) {
-                    mavPacket = mavStrFromDrone.substring(0, mavLength);
+                    var mavPacket = mavStrFromDrone.substring(0, mavLength);
 
                     mavStrFromDrone = mavStrFromDrone.substring(mavLength);
                     mavStrFromDroneLength = 0;
