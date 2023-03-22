@@ -9,6 +9,7 @@ global.my_drone_name = 'LVC_Drone';
 global.my_simul = 'on';
 global.my_sysid = 250;
 global.my_gcs_name = '';
+global.my_master_ip = '';
 
 let conf = {};
 let cse = {};
@@ -30,6 +31,7 @@ try {
     ae_name.drone_name = "LVC_Drone";
     ae_name.sysid = 251;
     ae_name.simul = "on";
+    ae_name.master_ip = "192.168.0.0";
 
     fs.writeFileSync('../flight.json', JSON.stringify(ae_name, null, 4), 'utf8');
 }
@@ -38,6 +40,7 @@ my_gcs_name = ae_name.gcs;
 my_drone_name = ae_name.drone_name;
 my_sysid = ae_name.sysid;
 my_simul = ae_name.simul;
+my_master_ip = ae_name.master_ip;
 
 cse.host        = ae_name.host;
 cse.port        = '7579';

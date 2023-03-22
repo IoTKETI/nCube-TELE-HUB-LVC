@@ -30,6 +30,13 @@ let rfPort_info = {
     BaudRate: '115200'
 }
 
+let slave_mqtt_client = null;
+
+let _m_ip_arr = my_master_ip.split('.');
+if (parseInt(_m_ip_arr[3]) > 1) {
+    slave_mqtt_connect(my_master_ip);
+}
+
 let mobius_sub_rc_topic = '/Mobius/';
 
 let MQTT_SUBSCRIPTION_ENABLE = 0;
@@ -362,7 +369,7 @@ function mqtt_connect(serverip) {
                 port: conf.cse.mqttport,
                 protocol: "mqtt",
                 keepalive: 10,
-                clientId: 'TELE_RF_' + nanoid(15),
+                clientId: 'TELE_HUB_RF_' + nanoid(15),
                 protocolId: "MQTT",
                 protocolVersion: 4,
                 clean: true,
@@ -376,7 +383,7 @@ function mqtt_connect(serverip) {
                 port: conf.cse.mqttport,
                 protocol: "mqtts",
                 keepalive: 10,
-                clientId: 'TELE_RF_' + nanoid(15),
+                clientId: 'TELE_HUB_RF_' + nanoid(15),
                 protocolId: "MQTT",
                 protocolVersion: 4,
                 clean: true,
@@ -451,7 +458,7 @@ function mqtt_connect(serverip) {
             } else if (topic === my_command_name) {
                 if (rfPort !== null) {
                     rfPort.write(message, () => {
-                        console.log('Send FC Command (' + message.toString('hex') + ')to drone')
+                        console.log('Send FC Command (' + message.toString('hex') + ') to drone');
                     });
                 }
                 sh_adn.crtci(topic + '?rcn=0', 0, message.toString('hex'), null, function () {
@@ -573,6 +580,10 @@ function rfPortData(data) {
                     if (mqtt_client !== null) {
                         mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
                     }
+                    if (slave_mqtt_client !== null) {
+                        slave_mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                    }
+
                     send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
 
                     setTimeout(parseMavFromDrone, 0, mavPacket);
@@ -593,6 +604,10 @@ function rfPortData(data) {
                     if (mqtt_client !== null) {
                         mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
                     }
+                    if (slave_mqtt_client !== null) {
+                        slave_mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                    }
+
                     send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
 
                     setTimeout(parseMavFromDrone, 0, mavPacket);
@@ -825,6 +840,74 @@ function createTcpCommLink(sys_id, port) {
 
         tcpSocket.listen(port, '127.0.0.1', function () {
             console.log('TCP Server for secure is listening on port ' + port);
+        });
+    }
+}
+
+function slave_mqtt_connect(serverip) {
+    if (slave_mqtt_client === null) {
+        if (conf.usesecure === 'disable') {
+            var connectOptions = {
+                host: serverip,
+                port: conf.cse.mqttport,
+                protocol: "mqtt",
+                keepalive: 10,
+                clientId: 'TELE_HUB_RF_' + nanoid(15),
+                protocolId: "MQTT",
+                protocolVersion: 4,
+                clean: true,
+                reconnectPeriod: 2000,
+                connectTimeout: 2000,
+                rejectUnauthorized: false
+            }
+        } else {
+            connectOptions = {
+                host: serverip,
+                port: conf.cse.mqttport,
+                protocol: "mqtts",
+                keepalive: 10,
+                clientId: 'TELE_HUB_RF_' + nanoid(15),
+                protocolId: "MQTT",
+                protocolVersion: 4,
+                clean: true,
+                reconnectPeriod: 2000,
+                connectTimeout: 2000,
+                key: fs.readFileSync("./server-key.pem"),
+                cert: fs.readFileSync("./server-crt.pem"),
+                rejectUnauthorized: false
+            }
+        }
+
+        slave_mqtt_client = mqtt.connect(connectOptions);
+
+        slave_mqtt_client.on('connect', () => {
+            console.log('slave_mqtt is connected to ( ' + serverip + ' )')
+
+            if (my_command_name !== '') {
+                slave_mqtt_client.subscribe(my_command_name, () => {
+                    console.log('[slave_mqtt] my_command_name is subscribed: ' + my_command_name);
+                });
+            }
+        });
+
+        slave_mqtt_client.on('message', (topic, message) => {
+            if (topic === my_command_name) {
+                if (rfPort !== null) {
+                    rfPort.write(message, () => {
+                        console.log('Send FC Command (' + message.toString('hex') + ') to master(' + serverip + ')');
+                    });
+                }
+                sh_adn.crtci(topic + '?rcn=0', 0, message.toString('hex'), null, function () {
+                });
+            } else {
+                console.log('Received Message ' + message.toString('hex') + ' From ' + topic);
+            }
+        });
+
+        slave_mqtt_client.on('error', function (err) {
+            console.log('[slave_mqtt] (error) ' + err.message);
+            slave_mqtt_client = null;
+            slave_mqtt_connect(serverip);
         });
     }
 }
