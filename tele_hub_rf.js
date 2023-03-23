@@ -569,14 +569,16 @@ function rfPortData(data) {
                 if ((mavStrFromDrone.length) >= mavLength) {
                     mavPacket = mavStrFromDrone.substring(0, mavLength);
                     // console.log('v1', mavPacket);
+                    let sysid = parseInt(mavStrFromDrone.substring(6, 8), 16);
 
-                    if (mqtt_client !== null) {
-                        mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                    if (my_sysid === sysid) {
+                        if (mqtt_client !== null) {
+                            mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                        }
+                        send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
+
+                        setTimeout(parseMavFromDrone, 0, mavPacket);
                     }
-                    send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
-
-                    setTimeout(parseMavFromDrone, 0, mavPacket);
-
                     mavStrFromDrone = mavStrFromDrone.substring(mavLength);
                     mavStrFromDroneLength = 0;
                 } else {
@@ -589,13 +591,17 @@ function rfPortData(data) {
                 if (mavStrFromDrone.length >= mavLength) {
                     mavPacket = mavStrFromDrone.substring(0, mavLength);
                     // console.log('v2', mavPacket);
+                    let sysid = parseInt(mavStrFromDrone.substring(10, 12), 16);
 
-                    if (mqtt_client !== null) {
-                        mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                    if (my_sysid === sysid) {
+                        if (mqtt_client !== null) {
+                            mqtt_client.publish(my_cnt_name, Buffer.from(mavPacket, 'hex'));
+                        }
+
+                        send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
+
+                        setTimeout(parseMavFromDrone, 0, mavPacket);
                     }
-                    send_aggr_to_Mobius(my_cnt_name, mavPacket, 2000);
-
-                    setTimeout(parseMavFromDrone, 0, mavPacket);
 
                     mavStrFromDrone = mavStrFromDrone.substring(mavLength);
                     mavStrFromDroneLength = 0;
